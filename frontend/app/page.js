@@ -1,10 +1,16 @@
 
 import Link from "next/link";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-const BACKEND_URL = API_URL.replace(/\/api\/?$/, "");
+const NORMALIZED_BASE_URL = API_BASE_URL.trim().replace(/\/+$/, "");
+
+const API_URL = NORMALIZED_BASE_URL.endsWith("/api")
+  ? NORMALIZED_BASE_URL
+  : `${NORMALIZED_BASE_URL}/api`;
+
+const BACKEND_URL = API_URL.replace(/\/api$/, "");
 
 const categories = [
   {
@@ -51,6 +57,7 @@ const categories = [
   },
 ];
 
+// PRODUCT IMAGE URL
 function getImage(product) {
   const image =
     product.image ||
@@ -62,32 +69,58 @@ function getImage(product) {
     return "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=700";
   }
 
-  if (image.startsWith("http")) return image;
+  // Already an absolute image URL
+  if (/^https?:\/\//i.test(image) || image.startsWith("data:")) {
+    return image;
+  }
 
+  // Backend uploaded image
   return `${BACKEND_URL}/${image.replace(/^\/+/, "")}`;
 }
 
+// PRICE FORMAT
 function formatPrice(price) {
   return `৳${Number(price || 0).toLocaleString("en-BD")}`;
 }
 
+// FETCH PRODUCTS FROM BACKEND
 async function getProducts() {
   try {
     const response = await fetch(`${API_URL}/products`, {
       cache: "no-store",
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.error(
+        "Product API failed:",
+        response.status,
+        response.statusText
+      );
+      return [];
+    }
 
     const result = await response.json();
 
-    if (Array.isArray(result)) return result;
-    if (Array.isArray(result.products)) return result.products;
-    if (Array.isArray(result.data)) return result.data;
+    // Your backend response:
+    // { success: true, products: [...] }
+
+    if (Array.isArray(result.products)) {
+      return result.products;
+    }
+
     if (Array.isArray(result.data?.products)) {
       return result.data.products;
     }
 
+    if (Array.isArray(result.data)) {
+      return result.data;
+    }
+
+    if (Array.isArray(result)) {
+      return result;
+    }
+
+    console.error("Unexpected product API response:", result);
     return [];
   } catch (error) {
     console.error("Product loading error:", error);
@@ -95,7 +128,13 @@ async function getProducts() {
   }
 }
 
-function SectionHeading({ eyebrow, title, description, href }) {
+// SECTION HEADING
+function SectionHeading({
+  eyebrow,
+  title,
+  description,
+  href,
+}) {
   return (
     <div className="section-heading">
       <div>
@@ -113,6 +152,7 @@ function SectionHeading({ eyebrow, title, description, href }) {
   );
 }
 
+// PRODUCT CARD
 function ProductCard({ product }) {
   const id = product._id || product.id;
   const name = product.name || product.title || "Shop product";
@@ -127,7 +167,12 @@ function ProductCard({ product }) {
           <span className="sale-badge">SALE</span>
         )}
 
-        <img src={image} alt={name} className="product-image" />
+        <img
+          src={image}
+          alt={name}
+          className="product-image"
+          loading="lazy"
+        />
       </Link>
 
       <div className="product-info">
@@ -155,8 +200,11 @@ function ProductCard({ product }) {
   );
 }
 
+// HOMEPAGE
 export default async function HomePage() {
   const products = await getProducts();
+
+  // Show latest 8 products
   const featuredProducts = products.slice(0, 8);
 
   const availableCategories = [
@@ -169,16 +217,19 @@ export default async function HomePage() {
 
   return (
     <main>
-      {/* NAVIGATION */}
+      {/* ANNOUNCEMENT */}
       <div className="announcement">
         ✨ Welcome to our store — Discover something beautiful today!
       </div>
 
+      {/* NAVIGATION */}
       <header className="site-header">
         <div className="header-inner">
           <Link href="/" className="brand">
             <span className="brand-icon">S</span>
-            <span>Shop<span className="brand-highlight">Nest</span></span>
+            <span>
+              Shop<span className="brand-highlight">Nest</span>
+            </span>
           </Link>
 
           <nav className="main-nav">
@@ -204,7 +255,9 @@ export default async function HomePage() {
       {/* HERO BANNER */}
       <section className="hero-section">
         <div className="hero-content">
-          <span className="hero-tag">YOUR HAPPY SHOPPING DESTINATION</span>
+          <span className="hero-tag">
+            YOUR HAPPY SHOPPING DESTINATION
+          </span>
 
           <h1>
             Find Your
@@ -236,6 +289,7 @@ export default async function HomePage() {
 
         <div className="hero-visual">
           <div className="hero-circle"></div>
+
           <img
             src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1000"
             alt="Beautiful shopping collection"
@@ -303,14 +357,22 @@ export default async function HomePage() {
         <div className="category-grid">
           {categories.map((category) => (
             <Link
-              href={`/products?category=${encodeURIComponent(category.search)}`}
+              href={`/products?category=${encodeURIComponent(
+                category.search
+              )}`}
               key={category.name}
               className={`category-card category-${category.color}`}
             >
-              <span className="category-icon">{category.icon}</span>
+              <span className="category-icon">
+                {category.icon}
+              </span>
+
               <h3>{category.name}</h3>
               <p>{category.subtitle}</p>
-              <span className="category-arrow">Explore →</span>
+
+              <span className="category-arrow">
+                Explore →
+              </span>
             </Link>
           ))}
         </div>
@@ -318,10 +380,13 @@ export default async function HomePage() {
         {availableCategories.length > 0 && (
           <div className="database-categories">
             <p>Categories in our store:</p>
+
             <div className="category-chips">
               {availableCategories.map((category) => (
                 <Link
-                  href={`/products?category=${encodeURIComponent(category)}`}
+                  href={`/products?category=${encodeURIComponent(
+                    category
+                  )}`}
                   key={category}
                 >
                   {category}
@@ -354,11 +419,14 @@ export default async function HomePage() {
           ) : (
             <div className="empty-products">
               <span>🛍️</span>
+
               <h3>Our collection is coming soon!</h3>
+
               <p>
                 Add products from your admin panel and they will
                 appear here automatically.
               </p>
+
               <Link href="/products" className="primary-button">
                 Explore Shop
               </Link>
@@ -370,16 +438,24 @@ export default async function HomePage() {
       {/* PROMOTION */}
       <section className="offer-section" id="offers">
         <div className="offer-content">
-          <span className="offer-label">A LITTLE SOMETHING SPECIAL</span>
-          <h2>Make Every Day a Little More Beautiful.</h2>
+          <span className="offer-label">
+            A LITTLE SOMETHING SPECIAL
+          </span>
+
+          <h2>
+            Make Every Day a Little More Beautiful.
+          </h2>
+
           <p>
             Explore our latest collection and find something you
             will love.
           </p>
+
           <Link href="/products" className="offer-button">
             Shop Now <span>→</span>
           </Link>
         </div>
+
         <div className="offer-decoration">✦</div>
       </section>
 
@@ -387,11 +463,14 @@ export default async function HomePage() {
       <section className="newsletter-section">
         <div>
           <span className="eyebrow">STAY IN THE LOOP</span>
+
           <h2>Good things are on the way!</h2>
+
           <p>
             Visit our store regularly to discover new arrivals and offers.
           </p>
         </div>
+
         <Link href="/products" className="newsletter-button">
           Discover Products →
         </Link>
@@ -403,7 +482,9 @@ export default async function HomePage() {
           <div className="footer-about">
             <Link href="/" className="brand footer-brand">
               <span className="brand-icon">S</span>
-              <span>Shop<span className="brand-highlight">Nest</span></span>
+              <span>
+                Shop<span className="brand-highlight">Nest</span>
+              </span>
             </Link>
 
             <p>
@@ -412,14 +493,38 @@ export default async function HomePage() {
             </p>
 
             <div className="social-links">
-              <a href="https://facebook.com" aria-label="Facebook">f</a>
-              <a href="https://instagram.com" aria-label="Instagram">◎</a>
-              <a href="https://youtube.com" aria-label="YouTube">▶</a>
+              <a
+                href="https://facebook.com"
+                aria-label="Facebook"
+                target="_blank"
+                rel="noreferrer"
+              >
+                f
+              </a>
+
+              <a
+                href="https://instagram.com"
+                aria-label="Instagram"
+                target="_blank"
+                rel="noreferrer"
+              >
+                ◎
+              </a>
+
+              <a
+                href="https://youtube.com"
+                aria-label="YouTube"
+                target="_blank"
+                rel="noreferrer"
+              >
+                ▶
+              </a>
             </div>
           </div>
 
           <div className="footer-column">
             <h3>Quick Links</h3>
+
             <Link href="/">Home</Link>
             <Link href="/products">All Products</Link>
             <Link href="/login">My Account</Link>
@@ -428,6 +533,7 @@ export default async function HomePage() {
 
           <div className="footer-column">
             <h3>Customer Care</h3>
+
             <Link href="/orders">My Orders</Link>
             <a href="#footer">Contact Us</a>
             <a href="#footer">Privacy Policy</a>
@@ -436,6 +542,7 @@ export default async function HomePage() {
 
           <div className="footer-column footer-contact">
             <h3>Get in Touch</h3>
+
             <p>📍 Bangladesh</p>
             <p>📧 support@shopnest.com</p>
             <p>🕒 Saturday – Thursday</p>
@@ -443,7 +550,10 @@ export default async function HomePage() {
         </div>
 
         <div className="footer-bottom">
-          <p>© {new Date().getFullYear()} ShopNest. All rights reserved.</p>
+          <p>
+            © {new Date().getFullYear()} ShopNest. All rights reserved.
+          </p>
+
           <p>Made with 💖 for happy shoppers</p>
         </div>
       </footer>
