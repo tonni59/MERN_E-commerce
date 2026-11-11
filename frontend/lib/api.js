@@ -2,23 +2,28 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
+// --------------------------------------------------
+// BASE URL CONFIGURATION
+// --------------------------------------------------
+
 const normalizeBaseUrl = (url) => {
   return url.trim().replace(/\/+$/, "");
 };
 
-// Automatically handle both:
+const BASE_URL = normalizeBaseUrl(API_BASE_URL);
+
+// Supports:
 // http://localhost:5000
+// http://localhost:5000/api
 // https://your-backend.onrender.com
 // https://your-backend.onrender.com/api
-
-const BASE_URL = normalizeBaseUrl(API_BASE_URL);
 
 export const API = BASE_URL.endsWith("/api")
   ? BASE_URL
   : `${BASE_URL}/api`;
 
 // --------------------------------------------------
-// IMAGE URL
+// IMAGE URL CONFIGURATION
 // --------------------------------------------------
 
 export const assetUrl = (imagePath) => {
@@ -33,12 +38,15 @@ export const assetUrl = (imagePath) => {
     return imagePath;
   }
 
+  // Backend origin without /api
   const backendOrigin = BASE_URL.replace(/\/api$/, "");
 
+  // Ensure image path starts with /
   const normalizedPath = imagePath.startsWith("/")
     ? imagePath
     : `/${imagePath}`;
 
+  // Final image URL
   return `${backendOrigin}${normalizedPath}`;
 };
 
@@ -47,7 +55,9 @@ export const assetUrl = (imagePath) => {
 // --------------------------------------------------
 
 export function getToken() {
-  if (typeof window === "undefined") return "";
+  if (typeof window === "undefined") {
+    return "";
+  }
 
   return localStorage.getItem("shop_token") || "";
 }
@@ -61,20 +71,28 @@ export async function api(path, options = {}) {
     ...(options.headers || {}),
   };
 
+  // Attach JWT token automatically
   const token = getToken();
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
+  // Detect FormData
   const isFormData =
     typeof FormData !== "undefined" &&
     options.body instanceof FormData;
 
-  if (options.body && !isFormData && !headers["Content-Type"]) {
+  // Set JSON content type only for non-FormData body
+  if (
+    options.body &&
+    !isFormData &&
+    !headers["Content-Type"]
+  ) {
     headers["Content-Type"] = "application/json";
   }
 
+  // Normalize API path
   const normalizedPath = path.startsWith("/")
     ? path
     : `/${path}`;
@@ -87,13 +105,15 @@ export async function api(path, options = {}) {
       headers,
       cache: "no-store",
     });
-  } catch (error) {
+  } catch {
     throw new Error(
       "Unable to connect to the server. Please check your internet connection.",
     );
   }
 
-  const contentType = response.headers.get("content-type") || "";
+  // Parse API response
+  const contentType =
+    response.headers.get("content-type") || "";
 
   let data;
 
@@ -101,9 +121,13 @@ export async function api(path, options = {}) {
     data = await response.json().catch(() => ({}));
   } else {
     const text = await response.text().catch(() => "");
-    data = { message: text };
+
+    data = {
+      message: text,
+    };
   }
 
+  // Handle API errors
   if (!response.ok) {
     throw new Error(
       data.message || `Request failed (${response.status})`,
@@ -114,7 +138,7 @@ export async function api(path, options = {}) {
 }
 
 // --------------------------------------------------
-// CURRENCY FORMAT
+// CURRENCY FORMAT (BDT)
 // --------------------------------------------------
 
 export function money(amount) {
